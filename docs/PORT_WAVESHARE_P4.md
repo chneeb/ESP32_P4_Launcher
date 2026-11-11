@@ -35,7 +35,8 @@ The board facts come from the esp32-scummvm port, which runs on this hardware:
 | DSI PHY | LDO channel 3, 2500 mV | yes |
 | Flash / PSRAM | 16 MB QIO, 32 MB PSRAM at 200 MHz | mostly (DIO) |
 | USB host | HS root port only (the lower J8 USB-A, next to the Ethernet jack); the hub ports fail (no Transaction Translator in IDF) | - |
-| RTC, battery, buttons | none (BOOT button possible) | - |
+| RTC, battery | none | - |
+| Buttons | NES/SNES Classic Mini controller on the I2C connector (0x52, hot-plug), P1 board pad | - |
 
 ## Phase 0: check on the board
 
@@ -59,7 +60,7 @@ Copied from `guition_p4_7` (same Function EV board wiring):
 - `idf_component.yml`: `esp_codec_dev` and esp_hosted / esp_wifi_remote, pinned exact.
 - `board_pins.h`, `board.c` (id, name, I2C bus, SD), `board_audio.c` (amp on GPIO 53).
 - `board_touch.c`: FT5x06 driver; points mirrored in both axes.
-- `board_rtc.c`, `board_buttons.c`: none.
+- `board_rtc.c`: none. `board_buttons.c`: NES/SNES Classic controller on the I2C connector.
 
 ## Phase 2: display
 
