@@ -4,20 +4,24 @@ Launcher firmware for ESP32-P4 boards that loads **relocatable PAPP v2 apps** fr
 PSRAM and runs them with a DLL-style interface layer. Successor to the PAPP concept in
 `C:\ESPIDFprojects\RetroESP32_P4` (reference project: drivers, ports, history).
 
-Design: `docs/ARCHITECTURE.md`. Plan + status: `docs/WORKPLAN.md`.
+Design: `docs/ARCHITECTURE.md`. Plan + status: `docs/WORKPLAN.md`. Which boards qualify (supported / community / retired): `docs/BOARD_SUPPORT.md`.
 
 ## Layout
 
 ```
-launcher/                 ESP-IDF project (factory app; main.c + home.c = LVGL home screen + app folders; store.c = the Store,
+launcher/                 ESP-IDF project (factory app; main.c + home.c = LVGL home screen + app folders + app search
+                          (any folder, USB keyboard letter opens it) + red dot on the gear when an online update waits (quiet check, 12 h); store.c = the Store,
                           first home tile: categories, app pages, install/update/remove; home_ui.h = what it uses from home.c). Board: -DLX_BOARD=<id> (default guition_p4_43)
 boards/<id>/board/        BSP implementation (component "board", pins esp_hosted for its C6); boards/<id>/sdkconfig.board.
                           guition_p4_43 (4.3" 480x800, image "launcher"; guition_p4_43_v3 = same sources built for
                           rev v3.x chips, BOARD_CHIP_V3 picks the id), guition_p4_7 (7" 1024x600), m5stack_tab5 (720x1280,
                           power rails on two PI4IOE5V6408 I2C expanders, esp_hosted 1.4 for M5Stack's C6 firmware),
-                          waveshare_p4_rpi_dsi (Waveshare dev kit + RPi Touch Display V1-style 800x480 panel: TC358762, ATTINY88
+                          waveshare_p4_rpi_dsi (RETIRED after 0.30.0, make_release.py RETIRED; example port: Waveshare dev kit + RPi Touch Display V1-style 800x480 panel: TC358762, ATTINY88
                           power/backlight at 0x45, FT5x06 touch; RGB565 shadow buffers converted to the RGB888 scan-out
-                          by the PPA, docs/PORT_WAVESHARE_P4.md)
+                          by the PPA, docs/PORT_WAVESHARE_P4.md), elecrow_p4_aio (Elecrow All-in-one Starter Kit SEE00804D:
+                          7" 1024x600 EK79007, scan direction on GPIO 32/33 = rotation 0, I2S amp without codec (software
+                          volume), 1-bit SD, ADC button ladder, C6 over SPI full duplex (no release C6 image: that one is SDIO); untested,
+                          docs/PORT_ELECROW_AIO.md)
 components/bsp/           BSP contract (bsp.h) — the core only talks to hardware through it
 components/papp_abi/      papp_abi.h — .papp v2 format + interfaces (shared with apps; no IDF includes)
 components/lx_loader/     App Manager: loader, relocation, imports, services (SYS/MEM/FS/DISP/AUDI/INPT/THRD/UI/NET/BLE), teardown;
@@ -33,7 +37,11 @@ components/lx_loader/     App Manager: loader, relocation, imports, services (SY
 components/fatfs/         copy of IDF 5.5.6's fatfs with exFAT on (FF_FS_EXFAT 1, + FF_USE_LABEL fix): overrides IDF's;
                           README_LAUNCHER.md = the changes, to redo when moving to another IDF version
 components/lx_devlink/    DevLink: framed protocol over USB-Serial-JTAG (devlink_proto.h)
-components/lx_common/     crc32, launcher version
+components/lx_common/     crc32, launcher version; lx_zip = zipped ROMs (central directory + the chip ROM's miniz tinfl):
+                          an app opening "dir/X.nes" that isn't there gets the .nes member of "dir/X.zip" (lx_services.c
+                          fs_open/fs_size): unpacked into PSRAM behind fopencookie, or for .gba/too big into
+                          /sd/launcher/zipcache (latest only, source.txt = what it holds); lx_ui's browser lists .zip for
+                          emulators whose extensions lack it and hands over the virtual name (saves follow it, recents keep the .zip)
 components/lx_gfx/        software drawing + 8x16 font for launcher screens (rotation-aware)
 components/lx_comp/       compositor: app surfaces → PPA scale/rotate → panel; launcher screens draw via it;
                           present is async with 2 buffers (task "lx_present" scales + flips while the app runs;
@@ -42,6 +50,8 @@ components/lx_audio/      audio engine: per-stream rings → resample → mix �
 components/lx_ui/         launcher-drawn screens for apps: content browser (pick_file) + message box; UI v4 wifi() = Wi-Fi picker
                           (scan list, password keyboard, joins with lx_net_connect = saved to wifi.txt; lx_net_restore on fail/cancel)
 components/lx_input/      input manager: USB HID gamepads/keyboards, XInput (Xbox 360) pads (lx_input_xinput) + board buttons (merged into P1) → players + event queue; HOME chord;
+                          USB hubs (CONFIG_USB_HOST_HUBS_SUPPORTED, every board): no TT in IDF, so lx_input_usb.c wraps hcd_port_command
+                          to keep the root port full speed (FSLS only, 30 MHz clock, frint 29999, UTMI fc_06 FS EOP + LS preamble bits);
                           lx_hid_parse = HID descriptor parser; lx_padmap = per-pad button mapping as text on the card:
                           /sd/config/gamepads_mine.txt (Map controller) wins over /sd/config/gamepads.txt (shared database,
                           SDcard/config/gamepads.txt, downloaded by the Store); NVS "padmap" = pre-0.23, read-only fallback
@@ -67,8 +77,8 @@ apps/                     Test/demo apps (hello, libc_test, gfx_demo: DISP test,
                           PAPP_MF_HIDDEN: shown on the home screen only with Settings → Show developer apps)
 apps/education/<app>/     Education apps for students (ids edu.*): `python apps/education/build.py` (build_all runs it too)
                           builds them into build/education and copies .papp + icon to SDcard/apps/Education/<app>/ (committed;
-                          the "Education" home screen folder, icon from apps/common/icons/folder_education.png). Never in the Store
-                          catalogue (make_apps_release reads build/apps only and skips edu.*). common/edu_ui.c (linked into each):
+                          the "Education" home screen folder, icon from apps/common/icons/folder_education.png). Also in the Store
+                          (category education, folder Education; make_apps_release reads build/education too). common/edu_ui.c (linked into each):
                           touch UI on an 800x480 surface, log panel, the remotes' shared state + Control screen.
                           ble_remote = BLE Remote, the Gution BLE demo ("gution-p4": control service mode/level/led/msg + Nordic
                           UART console, same protocol as ESP32P4_Gution4_7project's GutionTerminal); wifi_remote = Wi-Fi Remote,

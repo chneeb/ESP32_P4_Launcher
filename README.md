@@ -20,7 +20,7 @@ copy the `SDcard` folder to a card and get the apps from the Store, see [Getting
 
 | Launcher version | App ABI | Toolchain | Boards |
 |---|---|---|---|
-| 0.29.4 | 2.0-preview | ESP-IDF v5.5.6 | Guition ESP32-P4 4.3" (480×800; chip v1.x, or v3.x with its own image), Guition JC1060P470C 7" (1024×600), M5Stack Tab5 (720×1280), Waveshare ESP32-P4-WIFI6-Touch-LCD-3.5 (320×480, contributed), Waveshare ESP32-P4 dev kit + Raspberry Pi DSI display (800×480, contributed) |
+| 0.32.0 | 2.0-preview | ESP-IDF v5.5.6 | Guition ESP32-P4 4.3" (480×800; chip v1.x, or v3.x with its own image), Guition JC1060P470C 7" (1024×600), M5Stack Tab5 (720×1280), Waveshare ESP32-P4-WIFI6-Touch-LCD-3.5 (320×480, contributed), Elecrow All-in-one Starter Kit for ESP32-P4 (1024×600, not tested yet: [docs/PORT_ELECROW_AIO.md](docs/PORT_ELECROW_AIO.md)). Which boards qualify: [docs/BOARD_SUPPORT.md](docs/BOARD_SUPPORT.md) |
 
 > **Status: active development.** The ABI is a preview and may still change. Everything below describes
 > what exists in the code today; the plan for what comes next is in [docs/WORKPLAN.md](docs/WORKPLAN.md).
@@ -120,6 +120,8 @@ Two rules keep this portable: apps only see the ABI, and the launcher core only 
 
 - LVGL home screen with app icons, folders (with their own icons), clock, SD status and settings, laid out
   for the board's screen size
+- App search: finds an app in any folder by a part of its name, from the home screen's search field or by
+  typing on a USB keyboard; a red dot on the Settings gear when a launcher update is waiting
 - More than one board from one source tree: each board is a package under `boards/`, and apps never change
 - Compositor: an app draws a surface of any size, and the launcher scales and rotates it with the PPA, tear-free
 - Audio engine: up to 8 streams at any rate from 4 to 192 kHz, resampled and mixed
@@ -162,8 +164,8 @@ The test apps (`hello`, `gfx_demo`, `audio_test`, `input_test`, `thread_test`, `
 
 ## Hardware
 
-Three boards are supported. All run the same apps from the same SD card. Adding a board:
-[docs/PORTING_GUIDE.md](docs/PORTING_GUIDE.md).
+Three boards are supported and tested before each release; community boards follow below. All run the same apps
+from the same SD card. Which boards can be added, and how: [docs/BOARD_SUPPORT.md](docs/BOARD_SUPPORT.md).
 
 | Part | Guition ESP32-P4 4.3" | Guition JC1060P470C 7" | M5Stack Tab5 |
 |---|---|---|---|
@@ -178,10 +180,12 @@ Three boards are supported. All run the same apps from the same SD card. Adding 
 | Storage | microSD | microSD | microSD |
 | Input | USB host for gamepads and keyboards, optional GPIO button pad, battery pin | USB host for gamepads and keyboards | USB host for gamepads and keyboards |
 
-Contributed, tested by their authors: the Waveshare ESP32-P4-WIFI6-Touch-LCD-3.5 (`waveshare_p4_35`), and the
-Waveshare ESP32-P4 Module dev kit with a Raspberry Pi Touch Display (V1) or a compatible one, tested with a
-Cuqi 5" (`waveshare_p4_rpi_dsi`: 800×480 at about 47 Hz, FT5x06 touch, ES8311, no real-time clock; USB
-gamepads on the lower USB-A port only; notes in [docs/PORT_WAVESHARE_P4.md](docs/PORT_WAVESHARE_P4.md)).
+Community boards, tested by their owners: the Waveshare ESP32-P4-WIFI6-Touch-LCD-3.5 (`waveshare_p4_35`), and the
+Elecrow All-in-one Starter Kit for ESP32-P4 (`elecrow_p4_aio`, not tested yet: [docs/PORT_ELECROW_AIO.md](docs/PORT_ELECROW_AIO.md)).
+
+Retired: the Waveshare ESP32-P4 Module dev kit with a Raspberry Pi Touch Display (V1) or a compatible one
+(`waveshare_p4_rpi_dsi`). A dev kit takes many DSI panels and one image can't know which is connected, so 0.30.0
+is its last release image. Its source stays as an example port: [docs/PORT_WAVESHARE_P4.md](docs/PORT_WAVESHARE_P4.md).
 
 ## Getting started
 
@@ -202,6 +206,7 @@ have) and a USB cable for the board's USB-Serial-JTAG port.
    | Guition JC1060P470C 7" | `launcher_guition_p4_7_full.bin` |
    | M5Stack Tab5 | `launcher_m5stack_tab5_full.bin` |
    | Waveshare ESP32-P4-WIFI6-Touch-LCD-3.5 | `launcher_waveshare_p4_35_full.bin` |
+   | Elecrow All-in-one Starter Kit for ESP32-P4 (not tested yet) | `launcher_elecrow_p4_aio_full.bin` |
 
    A full image holds the bootloader, partition table and launcher, so it goes to address 0. The files
    without `_full` are only the launcher, for Settings → Update.
@@ -253,7 +258,7 @@ idf.py -p COM9 build flash                                                    # 
 idf.py -B build_guition_p4_43_v3 -DLX_BOARD=guition_p4_43_v3 -p COMx build flash  # Guition 4.3" with a v3.x chip
 idf.py -B build_guition_p4_7 -DLX_BOARD=guition_p4_7 -p COM10 build flash     # Guition 7"
 idf.py -B build_m5stack_tab5 -DLX_BOARD=m5stack_tab5 -p COM15 build flash     # M5Stack Tab5
-idf.py -B build_waveshare_p4_rpi_dsi -DLX_BOARD=waveshare_p4_rpi_dsi -p COMxx build flash   # Waveshare + RPi display
+idf.py -B build_waveshare_p4_rpi_dsi -DLX_BOARD=waveshare_p4_rpi_dsi -p COMxx build flash   # Waveshare + RPi display (retired, example port)
 cd ..
 ```
 
@@ -341,6 +346,12 @@ an empty folder for each system's ROMs. Its [README](SDcard/README.md) explains 
 
 No ROMs, BIOS files or commercial game data are included. You need to supply your own legally obtained files.
 
+ROMs can stay zipped (launcher 0.30 and later): `Zelda.zip` in `/sd/roms/nes/` shows up in the NES list, and the
+emulator gets the first file inside whose extension it takes. Its saves are named as if the ROM were `Zelda.nes`. A
+`.zip` is unpacked into memory when the game starts (stored or deflate, no passwords). Game Boy Advance ROMs are
+unpacked once into `/sd/launcher/zipcache/` instead, which keeps only the last one. Neo Geo games are zips of their
+own and are read as they are.
+
 | Game | Copy | In the `SDcard` folder |
 |---|---|---|
 | Doom | one IWAD to `/sd/roms/doom/`: `doom.wad`, `doom2.wad`, `plutonia.wad`, `tnt.wad`, `doom1.wad` or `freedoom.wad` (the first one found, in that order) | `doom1.wad`, the shareware episode. [Freedoom](https://freedoom.github.io/) also works (rename `freedoom1.wad` to `freedoom.wad`) |
@@ -406,6 +417,15 @@ still work and are copied to your file the first time the pad connects.
 
 The database already covers the Sony DualShock 3 and DualShock 4, the 8BitDo Ultimate 2C Wired and generic
 USB NES pads (VID 0079, PID 0011).
+
+### USB hubs
+
+Several pads can share the board's USB port through a hub (launcher 0.31 and later). The
+port then runs at full speed, which pads and keyboards use anyway. What to know:
+
+- Full-speed pads (tested: DualShock 4) and low-speed devices (tested: a keyboard and a cheap USB pad) work
+  through a hub, several at once.
+- Plugging a hub in while the board runs can restart the board on a weak USB supply; a powered hub avoids it.
 
 ### Wi-Fi network
 
@@ -740,7 +760,8 @@ Declare your panel's rotation and the compositor and touch code adapt. Copy
 [boards/guition_p4_43](boards/guition_p4_43) as a start, then build with `idf.py -DLX_BOARD=<id> build`.
 
 Existing `.papp` files run unchanged: the Guition 7" and the M5Stack Tab5 run the same SD card with no app
-rebuilt. [docs/PORTING_GUIDE.md](docs/PORTING_GUIDE.md) is the checklist from that port.
+rebuilt. [docs/PORTING_GUIDE.md](docs/PORTING_GUIDE.md) is the checklist from that port. Before you start, check
+the board qualifies and open an issue: [docs/BOARD_SUPPORT.md](docs/BOARD_SUPPORT.md).
 
 ## Repository layout
 
